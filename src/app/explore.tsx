@@ -1,125 +1,150 @@
-import { Image } from 'expo-image';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
+import * as Speech from 'expo-speech';
 import { SymbolView } from 'expo-symbols';
-import { Platform, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Alert, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ExternalLink } from '@/components/external-link';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Collapsible } from '@/components/ui/collapsible';
-import { WebBadge } from '@/components/web-badge';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
+interface Task {
+  id: string;
+  text: string;
+  completed: boolean;
+  tag?: string;
+}
+
+const MAX_NOTE_LENGTH = 200;
+
 export default function TabTwoScreen() {
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [inputText, setInputText] = useState('');
+  const [inputTag, setInputTag] = useState('');
   const safeAreaInsets = useSafeAreaInsets();
-  const insets = {
-    ...safeAreaInsets,
-    bottom: safeAreaInsets.bottom + BottomTabInset + Spacing.three,
-  };
   const theme = useTheme();
 
+  useEffect(() => {
+    loadTasks();
+    requestNotificationPermissions();
+  }, []);
+
+  const requestNotificationPermissions = async () => {
+    const { status } = await Notifications.requestPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permisos de Notificación', 'Necesitamos permisos para enviar recordatorios.');
+    }
+  };
+
+  const loadTasks = async () => {
+    const saved = await AsyncStorage.getItem('tasks');
+    if (saved) setTasks(JSON.parse(saved));
+  };
+
+  const addTask = async () => {
+    if (!inputText.trim()) return;
+    if (inputText.trim().length > MAX_NOTE_LENGTH) {
+      Alert.alert('Nota demasiado larga', `La nota no puede exceder los ${MAX_NOTE_LENGTH} caracteres.`);
+      return;
+    }
+    const newTask: Task = {
+      id: Date.now().toString(),
+      text: inputText.trim(),
+      completed: false,
+      tag: inputTag.trim() || undefined
+    };
+    const updated = [newTask, ...tasks];
+    setTasks(updated);
+    await AsyncStorage.setItem('tasks', JSON.stringify(updated));
+    setInputText('');
+    setInputTag('');
+  };
+
+  const toggleTask = async (id: string) => {
+    const updated = tasks.map(t => t.id === id ? { ...t, completed: !t.completed } : t);
+    setTasks(updated);
+    await AsyncStorage.setItem('tasks', JSON.stringify(updated));
+  };
+
+  const startVoiceNote = () => {
+    if (Platform.OS === 'web') {
+      Alert.alert("No disponible", "El reconocimiento de voz requiere dispositivo físico.");
+      return;
+    }
+    Speech.speak("Función de dictado activada. Por favor, hable.", { language: 'es-ES' });
+    Alert.alert("Reconocimiento de Voz", "La función de dictado de voz requiere una librería adicional para convertir voz a texto. Actualmente, solo se simula la activación.");
+  };
+
+  const scheduleHydrationReminder = async () => {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: "¡Hora de hidratarse! 💧",
+        body: "Bebe un poco de agua para mantenerte concentrado.",
+        sound: 'default',
+      },
+      trigger: {
+        type: 'timeInterval',
+        seconds: 60 * 60,
+        repeats: true,
+      },
+    });
+    Alert.alert("Recordatorio de Hidratación", "Se ha programado un recordatorio de hidratación cada hora.");
+  };
+
   const contentPlatformStyle = Platform.select({
-    android: {
-      paddingTop: insets.top,
-      paddingLeft: insets.left,
-      paddingRight: insets.right,
-      paddingBottom: insets.bottom,
-    },
-    web: {
-      paddingTop: Spacing.six,
-      paddingBottom: Spacing.four,
-    },
+    android: { paddingTop: safeAreaInsets.top },
+    web: { paddingTop: Spacing.six },
   });
 
   return (
     <ScrollView
       style={[styles.scrollView, { backgroundColor: theme.background }]}
-      contentInset={insets}
       contentContainerStyle={[styles.contentContainer, contentPlatformStyle]}>
       <ThemedView style={styles.container}>
         <ThemedView style={styles.titleContainer}>
-          <ThemedText type="subtitle">Explore</ThemedText>
-          <ThemedText style={styles.centerText} themeColor="textSecondary">
-            This starter app includes example{'\n'}code to help you get started.
-          </ThemedText>
-
-          <ExternalLink href="https://docs.expo.dev" asChild>
-            <Pressable style={({ pressed }) => pressed && styles.pressed}>
-              <ThemedView type="backgroundElement" style={styles.linkButton}>
-                <ThemedText type="link">Expo documentation</ThemedText>
-                <SymbolView
-                  tintColor={theme.text}
-                  name={{ ios: 'arrow.up.right.square', android: 'link', web: 'link' }}
-                  size={12}
-                />
-              </ThemedView>
-            </Pressable>
-          </ExternalLink>
+          <ThemedText type="subtitle">Tareas y Notas</ThemedText>
         </ThemedView>
 
-        <ThemedView style={styles.sectionsWrapper}>
-          <Collapsible title="File-based routing">
-            <ThemedText type="small">
-              This app has two screens: <ThemedText type="code">src/app/index.tsx</ThemedText> and{' '}
-              <ThemedText type="code">src/app/explore.tsx</ThemedText>
-            </ThemedText>
-            <ThemedText type="small">
-              The layout file in <ThemedText type="code">src/app/_layout.tsx</ThemedText> sets up
-              the tab navigator.
-            </ThemedText>
-            <ExternalLink href="https://docs.expo.dev/router/introduction">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
+        <ThemedView type="backgroundElement" style={styles.inputWrapper}>
+          <TextInput
+            style={[styles.input, { color: theme.text }]}
+            placeholder="Nuevo bug o idea..."
+            placeholderTextColor={theme.textSecondary}
+            value={inputText}
+            onChangeText={setInputText}
+            onSubmitEditing={addTask}
+          />
+          <TouchableOpacity onPress={startVoiceNote}>
+            <SymbolView name="mic.fill" size={20} tintColor="#208AEF" />
+          </TouchableOpacity>
+        </ThemedView>
 
-          <Collapsible title="Android, iOS, and web support">
-            <ThemedView type="backgroundElement" style={styles.collapsibleContent}>
-              <ThemedText type="small">
-                You can open this project on Android, iOS, and the web. To open the web version,
-                press <ThemedText type="smallBold">w</ThemedText> in the terminal running this
-                project.
-              </ThemedText>
-              <Image
-                source={require('@/assets/images/tutorial-web.png')}
-                style={styles.imageTutorial}
+        <TouchableOpacity onPress={scheduleHydrationReminder} style={styles.reminderButton}>
+          <SymbolView name="drop.fill" size={20} tintColor="#208AEF" />
+          <ThemedText type="smallBold">Programar Recordatorio de Hidratación</ThemedText>
+        </TouchableOpacity>
+
+        <ThemedView style={styles.taskList}>
+          {tasks.map(task => (
+            <TouchableOpacity 
+              key={task.id} 
+              onPress={() => toggleTask(task.id)}
+              style={styles.taskItem}>
+              <SymbolView 
+                name={task.completed ? "checkmark.circle.fill" : "circle"} 
+                size={20} 
+                tintColor={task.completed ? "#4CAF50" : theme.textSecondary} 
               />
-            </ThemedView>
-          </Collapsible>
-
-          <Collapsible title="Images">
-            <ThemedText type="small">
-              For static images, you can use the <ThemedText type="code">@2x</ThemedText> and{' '}
-              <ThemedText type="code">@3x</ThemedText> suffixes to provide files for different
-              screen densities.
-            </ThemedText>
-            <Image source={require('@/assets/images/react-logo.png')} style={styles.imageReact} />
-            <ExternalLink href="https://reactnative.dev/docs/images">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
-
-          <Collapsible title="Light and dark mode components">
-            <ThemedText type="small">
-              This template has light and dark mode support. The{' '}
-              <ThemedText type="code">useColorScheme()</ThemedText> hook lets you inspect what the
-              user&apos;s current color scheme is, and so you can adjust UI colors accordingly.
-            </ThemedText>
-            <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
-
-          <Collapsible title="Animations">
-            <ThemedText type="small">
-              This template includes an example of an animated component. The{' '}
-              <ThemedText type="code">src/components/ui/collapsible.tsx</ThemedText> component uses
-              the powerful <ThemedText type="code">react-native-reanimated</ThemedText> library to
-              animate opening this hint.
-            </ThemedText>
-          </Collapsible>
+              <ThemedText style={[task.completed && styles.completedText]}>
+                {task.text}{' '}
+                {task.tag && <ThemedText type="small" themeColor="textSecondary">({task.tag})</ThemedText>}
+              </ThemedText>
+            </TouchableOpacity>
+          ))}
         </ThemedView>
-        {Platform.OS === 'web' && <WebBadge />}
       </ThemedView>
     </ScrollView>
   );
@@ -137,44 +162,43 @@ const styles = StyleSheet.create({
     maxWidth: MaxContentWidth,
     flexGrow: 1,
   },
-  titleContainer: {
-    gap: Spacing.three,
-    alignItems: 'center',
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.six,
-  },
-  centerText: {
-    textAlign: 'center',
-  },
-  pressed: {
-    opacity: 0.7,
-  },
-  linkButton: {
+  titleContainer: { padding: Spacing.four },
+  inputWrapper: {
     flexDirection: 'row',
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.two,
-    borderRadius: Spacing.five,
+    alignItems: 'center',
+    marginHorizontal: Spacing.four,
+    padding: Spacing.three,
+    borderRadius: Spacing.two,
+    gap: Spacing.two,
+  },
+  input: {
+    flex: 1,
+    fontSize: 16,
+  },
+  reminderButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'center',
-    gap: Spacing.one,
+    marginHorizontal: Spacing.four,
+    marginTop: Spacing.four,
+    padding: Spacing.three,
+    borderRadius: Spacing.two,
+    backgroundColor: '#E0E1E6',
+    gap: Spacing.two,
+  },
+  taskList: {
+    padding: Spacing.four,
+    gap: Spacing.three,
+    paddingBottom: BottomTabInset,
+  },
+  taskItem: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: Spacing.three,
+    paddingVertical: Spacing.one,
   },
-  sectionsWrapper: {
-    gap: Spacing.five,
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.three,
-  },
-  collapsibleContent: {
-    alignItems: 'center',
-  },
-  imageTutorial: {
-    width: '100%',
-    aspectRatio: 296 / 171,
-    borderRadius: Spacing.three,
-    marginTop: Spacing.two,
-  },
-  imageReact: {
-    width: 100,
-    height: 100,
-    alignSelf: 'center',
+  completedText: {
+    textDecorationLine: 'line-through',
+    opacity: 0.5,
   },
 });
