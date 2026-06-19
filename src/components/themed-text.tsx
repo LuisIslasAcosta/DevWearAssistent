@@ -4,7 +4,7 @@ import { Fonts, ThemeColor } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 export type ThemedTextProps = TextProps & {
-  type?: 'default' | 'title' | 'small' | 'smallBold' | 'subtitle' | 'link' | 'linkPrimary' | 'code';
+  type?: 'default' | 'title' | 'small' | 'smallBold' | 'subtitle' | 'link' | 'linkPrimary' | 'code' | 'mono' | 'label';
   themeColor?: ThemeColor;
 };
 
@@ -23,6 +23,8 @@ export function ThemedText({ style, type = 'default', themeColor, ...rest }: The
         type === 'link' && styles.link,
         type === 'linkPrimary' && styles.linkPrimary,
         type === 'code' && styles.code,
+        type === 'mono' && styles.mono,
+        type === 'label' && styles.label,
         style,
       ]}
       {...rest}
@@ -30,44 +32,21 @@ export function ThemedText({ style, type = 'default', themeColor, ...rest }: The
   );
 }
 
+const monoFamily = Platform.select({
+  ios: 'ui-monospace' as string,
+  default: 'monospace' as string,
+  web: 'var(--font-mono)',
+});
+
 const styles = StyleSheet.create({
-  small: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: 500,
-  },
-  smallBold: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: 700,
-  },
-  default: {
-    fontSize: 16,
-    lineHeight: 24,
-    fontWeight: 500,
-  },
-  title: {
-    fontSize: 48,
-    fontWeight: 600,
-    lineHeight: 52,
-  },
-  subtitle: {
-    fontSize: 32,
-    lineHeight: 44,
-    fontWeight: 600,
-  },
-  link: {
-    lineHeight: 30,
-    fontSize: 14,
-  },
-  linkPrimary: {
-    lineHeight: 30,
-    fontSize: 14,
-    color: '#3c87f7',
-  },
-  code: {
-    fontFamily: Fonts.mono,
-    fontWeight: Platform.select({ android: 700 }) ?? 500,
-    fontSize: 12,
-  },
+  small: { fontSize: 13, lineHeight: 18, fontWeight: '400' },
+  smallBold: { fontSize: 13, lineHeight: 18, fontWeight: '700', letterSpacing: 0.2 },
+  default: { fontSize: 15, lineHeight: 22, fontWeight: '400' },
+  title: { fontSize: 44, fontWeight: '700', lineHeight: 48, letterSpacing: -1, fontFamily: monoFamily },
+  subtitle: { fontSize: 22, lineHeight: 30, fontWeight: '600', letterSpacing: -0.3 },
+  link: { lineHeight: 28, fontSize: 13, fontWeight: '500' },
+  linkPrimary: { lineHeight: 28, fontSize: 13, color: '#3FB950', fontWeight: '500' },
+  code: { fontFamily: monoFamily, fontWeight: Platform.select({ android: '700' }) ?? '500', fontSize: 12 },
+  mono: { fontFamily: monoFamily, fontSize: 13, lineHeight: 18, letterSpacing: 0.5 },
+  label: { fontFamily: monoFamily, fontSize: 10, fontWeight: '600', letterSpacing: 1.5, textTransform: 'uppercase' },
 });
